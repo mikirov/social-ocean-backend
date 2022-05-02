@@ -11,7 +11,6 @@ export const ADD_BIO_CLOUT_POINTS = 20;
 export const ADD_FAVORITE_CLOUT_POINTS = 50;
 export const ADD_RECOMMENDATION_CLOUT_POINTS = 75;
 export const ADD_POST_CLOUT_POINTS = 75;
-export const ADD_SAVE_CLOUT_POINTS = 25;
 export const PREFERRED_USER_FAVORITE_THRESHOLD = 7;
 
 export const getProductInfo = async (externalProductId:string): Promise<[any, FirebaseFirestore.DocumentReference]> => {
@@ -117,9 +116,6 @@ export const updateUserCounters = async(db: any, userId: string) => {
     const followersSnapshot = await db.collection('following').where('toUserId', '==', userId).get();
     const followerCount = followersSnapshot.docs.filter(doc => doc.exists).length;
 
-    const savedSnapshot = await db.collection('savedItems').where('userId', '==', userId).get();
-    const savedCount = savedSnapshot.docs.filter(doc => doc.exists).length;
-
     const postSnapshot = await db.collection('posts').where('userId', '==', userId).get();
     const postCount = postSnapshot.docs.filter(doc => doc.exists).length;
 
@@ -133,11 +129,6 @@ export const updateUserCounters = async(db: any, userId: string) => {
     if(user.bio)
     {
         clout += ADD_BIO_CLOUT_POINTS;
-    }
-
-    if(savedCount > 0)
-    {
-        clout += savedCount * ADD_SAVE_CLOUT_POINTS;
     }
 
     if(postCount > 0)
@@ -278,20 +269,18 @@ export const updateProductFieldsInCollection = async(db, collectionName: string,
     //batchArray.forEach(async batch => await batch.commit());
 }
 
-export const hasUserLikedRecommendation = async (db, recommendationId: string, userId: string) : Promise<boolean> => {
-    const snapshots = await db.collection('recommendedItemLikes').where('recommendationId', '==', recommendationId).get();
-    const datas: FirebaseFirestore.DocumentData[] = snapshots.docs.filter(doc => doc.exists).map(doc => doc.data());
-    return datas.find((data: FirebaseFirestore.DocumentData) => data.userId == userId) != undefined;
+//this function checks if there is more than one like for a recommendation by a user
+export const hasMoreThanOneLike = async (db, collectionName: string, fieldName: string, recommendationId: string, userId: string) : Promise<boolean> => {
+    const snapshots = await db.collection(collectionName).where(fieldName, '==', recommendationId).get();
+    const likerIds: string[] = snapshots.docs.filter(doc => doc.exists).map(doc => doc.data().userId);
+    let likeCount = 0;
+    likerIds.forEach((id) => id == userId ? likeCount + 1 : null)
+    return likeCount > 1;
 }
 
-export const hasUserLikedPost = async (db, postId: string, userId: string) : Promise<boolean> => {
-    const snapshots = await db.collection('postedItemLikes').where('postId', '==', postId).get();
-    const datas: FirebaseFirestore.DocumentData[] = snapshots.docs.filter(doc => doc.exists).map(doc => doc.data);
-    return datas.find((data: FirebaseFirestore.DocumentData) => data.userId == userId) != undefined;
-}
 
 export const getNumberProductsFavoritedByUser = async (db: any, userId: string) => {
-    const snapshots = await db.collection('favoriteItems').where('userId', '==', userId).get();
+    const snapshots = await db.collnection('favoriteItems').where('userId', '==', userId).get();
     return snapshots.docs.filter(doc => doc.exists).length;
 
 }

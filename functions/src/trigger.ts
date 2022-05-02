@@ -21,7 +21,7 @@ import {
     updateProductFieldsInCollection,
     updateRecommendationCounters,
     updateUserCounters,
-    saveItemData, updateUserFieldsInCollection, hasUserLikedRecommendation
+    saveItemData, updateUserFieldsInCollection, hasMoreThanOneLike
 } from './helper';
 
 const  db = admin.firestore();
@@ -138,6 +138,14 @@ export const onPostLiked = functions.firestore
 
         try
         {
+            const hasLikedPost: boolean = await hasMoreThanOneLike(db, 'postedItemLikes', 'postId', docData.postId, docData.userId);
+            if(hasLikedPost)
+            {
+                functions.logger.error("User " + docData.userId + "cannot like post " + docData.postId + " twice");
+                await docRef.delete();
+                return;
+            }
+
             let [post] = await getPostInfo(docData.postId);
             const [userData] = await getUserInfo(docData.userId);
             const [product] = await getProductInfo(docData.externalProductId);
@@ -157,6 +165,13 @@ export const onPostUnliked = functions.firestore
         try
         {
             const docData = change.data();
+
+            const hasLikedPost: boolean = await hasMoreThanOneLike(db, 'postedItemLikes', 'postId', docData.postId, docData.userId);
+            if(!hasLikedPost)
+            {
+                functions.logger.error("User " + docData.userId + "has not liked post " + docData.postId + "that they're trying to unlike")
+                return;
+            }
 
             let [post, postRef] = await getPostInfo(docData.postId);
 
@@ -182,7 +197,7 @@ export const onRecommendationLiked = functions.firestore
             const docData = change.data();
             const docRef = change.ref;
 
-            const hasLikedRecommendation: boolean = await hasUserLikedRecommendation(db, docData.recommendationId, docData.userId);
+            const hasLikedRecommendation: boolean = await hasMoreThanOneLike(db, 'recommendedItemLikes', 'recommendationId', docData.recommendationId, docData.userId);
             if(hasLikedRecommendation)
             {
                 functions.logger.error("User " + docData.userId + "cannot like recommendation " + docData.recommendationId + " twice");
@@ -211,7 +226,7 @@ export const onRecommendationUnliked = functions.firestore
         {
             const docData = change.data();
 
-            const hasLikedRecommendation: boolean = await hasUserLikedRecommendation(db, docData.recommendationId, docData.userId);
+            const hasLikedRecommendation: boolean = await hasMoreThanOneLike(db, 'recommendedItemLikes', 'recommendationId', docData.recommendationId, docData.userId);
             if(!hasLikedRecommendation)
             {
                 functions.logger.error("User " + docData.userId + "has not liked recommendation " + docData.recommendationId + "that they're trying to unlike")

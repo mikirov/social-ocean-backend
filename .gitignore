@@ -6,8 +6,15 @@ lib/**/*.js.map
 typings/
 
 # Node.js dependency directory
-node_modules/
+functions/node_modules/
+functions/lib
 
 .env
 
 .idea/
+
+node_modules
+
+**/firebase-service-account.json
+
+**/firebase-debug.log
