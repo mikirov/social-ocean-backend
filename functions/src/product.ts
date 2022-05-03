@@ -1,6 +1,11 @@
 export interface Product
 {
     boughtCount: number;
+    postCount: number;
+    recommendationCount: number;
+    totalPostLikes: number;
+    totalRecommendationLikes: number;
+
     brand: string;
     category: string;
     dateAdded: Date;
@@ -10,7 +15,7 @@ export interface Product
     favoriteCount: number;
     hero: string;
     isActive: boolean;
-    isCatchofTheDat: boolean;
+    isCatchofTheDay: boolean;
     isHighlighted: boolean;
     isPopularUS: boolean;
     link: string;

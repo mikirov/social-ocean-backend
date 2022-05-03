@@ -5,6 +5,7 @@ import {Product} from "./product";
 import {User} from "./user";
 import {Post} from "./post";
 import {Brand} from "./brand";
+import {Recommendation} from "./recommendation";
 
 export const ACCOUNT_CREATION_CLOUT_POINTS = 50;
 export const ADD_BIO_CLOUT_POINTS = 20;
@@ -32,7 +33,7 @@ export const getProductInfo = async (externalProductId:string): Promise<[any, Fi
     return [product, productRef];
 }
 
-export const getRecommendationInfo = async (recommendationId: string): Promise<[any, FirebaseFirestore.DocumentReference]> => {
+export const getRecommendationInfo = async (recommendationId: string): Promise<[Recommendation, FirebaseFirestore.DocumentReference]> => {
 
     const recommendationRef: FirebaseFirestore.DocumentReference = admin.firestore().collection('recommendations').doc(recommendationId);
 
@@ -41,7 +42,7 @@ export const getRecommendationInfo = async (recommendationId: string): Promise<[
     {
         throw new Error("couldn't find recommendation");
     }
-    const recommendation = recommendationSnapshot.data();
+    const recommendation: Recommendation = recommendationSnapshot.data();
 
     return [recommendation, recommendationRef];
 }
@@ -107,22 +108,21 @@ export const sendPushNotification = async (token: string, body: string) => {
     functions.logger.info("Sent notification to token: " + token);
 }
 
-export const updateUserCounters = async(db: any, userId: string) => {
-    let [user, userRef] = await getUserInfo(userId);
+export const updateUserCounters = async(db: any, user: User, userRef: FirebaseFirestore.DocumentReference) => {
 
-    const followingSnapshot = await db.collection('following').where('fromUserId', '==', userId).get();
+    const followingSnapshot = await db.collection('following').where('fromUserId', '==', userRef.id).get();
     const followingCount = followingSnapshot.docs.filter(doc => doc.exists).length;
 
-    const followersSnapshot = await db.collection('following').where('toUserId', '==', userId).get();
+    const followersSnapshot = await db.collection('following').where('toUserId', '==', userRef.id).get();
     const followerCount = followersSnapshot.docs.filter(doc => doc.exists).length;
 
-    const postSnapshot = await db.collection('posts').where('userId', '==', userId).get();
+    const postSnapshot = await db.collection('posts').where('userId', '==', userRef.id).get();
     const postCount = postSnapshot.docs.filter(doc => doc.exists).length;
 
-    const favoriteSnapshot = await db.collection('favoriteItems').where('userId', '==', userId).get();
+    const favoriteSnapshot = await db.collection('favoriteItems').where('userId', '==', userRef.id).get();
     const favoriteCount = favoriteSnapshot.docs.filter(doc => doc.exists).length;
 
-    const recommendationSnapshot = await db.collection('recommendations').where('userId', '==', userId).get();
+    const recommendationSnapshot = await db.collection('recommendations').where('userId', '==', userRef.id).get();
     const recommendationCount = recommendationSnapshot.docs.filter(doc => doc.exists).length;
 
     let clout = ACCOUNT_CREATION_CLOUT_POINTS;
@@ -146,7 +146,7 @@ export const updateUserCounters = async(db: any, userId: string) => {
         clout += favoriteCount * ADD_FAVORITE_CLOUT_POINTS;
     }
 
-    const productsFavoritedByUser: number = await getNumberProductsFavoritedByUser(db, userId);
+    const productsFavoritedByUser: number = await getNumberProductsFavoritedByUser(db, userRef.id);
 
     if(productsFavoritedByUser == PREFERRED_USER_FAVORITE_THRESHOLD && !user.isPreferred)
     {
@@ -155,7 +155,7 @@ export const updateUserCounters = async(db: any, userId: string) => {
             isPreferred: true
         };
 
-        await addProUserActivity(db, userId);
+        await addProUserActivity(db, userRef.id);
     }
 
     user =
@@ -170,9 +170,7 @@ export const updateUserCounters = async(db: any, userId: string) => {
     await userRef.set(user, {merge: true});
 }
 
-export const updateProductCounters = async (db: any, externalId: string) => {
-
-    let [product, productRef] = await getProductInfo(externalId);
+export const updateProductCounters = async (db: any, product: Product, productRef: FirebaseFirestore.DocumentReference) => {
 
     const savedSnapshot = await db.collection('savedItems').where('externalProductId', '==', product.externalId).get();
     const saveCount: number = savedSnapshot.docs.filter(doc => doc.exists).length;
@@ -206,26 +204,22 @@ export const updateProductCounters = async (db: any, externalId: string) => {
     await productRef.set(product, {merge: true});
 }
 
-export const updateRecommendationCounters = async (db: any, recommendationId: string) => {
+export const updateRecommendationCounters = async (db: any, recommendation: Recommendation, recommendationRef: FirebaseFirestore.DocumentReference) => {
 
-    let [recommendation, recommendationRef] = await getRecommendationInfo(recommendationId);
-
-    const savedSnapshot = await db.collection('recommendedItemLikes').where('recommendationId', '==', recommendationId).get();
+    const savedSnapshot = await db.collection('recommendedItemLikes').where('recommendationId', '==', recommendationRef.id).get();
     const rate: number = savedSnapshot.docs.filter(doc => doc.exists).length;
 
     recommendation = {
         ...recommendation,
         rate,
     }
-
+    functions.logger.info(recommendation);
     await recommendationRef.set(recommendation, {merge: true});
 }
 
-export const updatePostCounters = async (db: any, postId: string) => {
+export const updatePostCounters = async (db: any, post: Post, postRef: FirebaseFirestore.DocumentReference) => {
 
-    let [post, postRef] = await getPostInfo(postId);
-
-    const savedSnapshot = await db.collection('postedItemLikes').where('postId', '==', postId).get();
+    const savedSnapshot = await db.collection('postedItemLikes').where('postId', '==', postRef.id).get();
     const rate: number = savedSnapshot.docs.filter(doc => doc.exists).length;
 
     post = {
@@ -270,17 +264,18 @@ export const updateProductFieldsInCollection = async(db, collectionName: string,
 }
 
 //this function checks if there is more than one like for a recommendation by a user
-export const hasMoreThanOneLike = async (db, collectionName: string, fieldName: string, recommendationId: string, userId: string) : Promise<boolean> => {
+export const hasMoreLikesThanCount = async (db, collectionName: string, fieldName: string, recommendationId: string, userId: string, count: number) : Promise<boolean> => {
     const snapshots = await db.collection(collectionName).where(fieldName, '==', recommendationId).get();
     const likerIds: string[] = snapshots.docs.filter(doc => doc.exists).map(doc => doc.data().userId);
-    let likeCount = 0;
-    likerIds.forEach((id) => id == userId ? likeCount + 1 : null)
-    return likeCount > 1;
+    let likeCount = likerIds.filter((id) => id == userId).length;
+    functions.logger.info("like count: " + likeCount);
+    return likeCount > count;
 }
 
 
+
 export const getNumberProductsFavoritedByUser = async (db: any, userId: string) => {
-    const snapshots = await db.collnection('favoriteItems').where('userId', '==', userId).get();
+    const snapshots = await db.collection('favoriteItems').where('userId', '==', userId).get();
     return snapshots.docs.filter(doc => doc.exists).length;
 
 }
@@ -498,7 +493,7 @@ export const saveItemData = async (docData, docRef, product, userData, recommend
             recommendationTitle: recommendation.title || "",
             recommendationSubtitle: recommendation.subtitle || "",
             recommendationDetails: recommendation.details || "",
-            recommendationRate: recommendation.rate || ""
+            recommendationRate: recommendation.rate || 0
         }
     }
 

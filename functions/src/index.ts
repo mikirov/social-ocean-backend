@@ -297,7 +297,8 @@ app.post("/recalculate", async (req: Express.Request, res: Express.Response) => 
 app.post("/recalculateUser", async (req: Express.Request, res: Express.Response) => {
     try
     {
-        await updateUserCounters(db, req.body.userId);
+        let [user, userRef] = await getUserInfo(req.body.userId);
+        await updateUserCounters(db, user, userRef);
         res.status(200).send("OK");
 
     } catch (e) {
@@ -309,7 +310,8 @@ app.post("/recalculateUser", async (req: Express.Request, res: Express.Response)
 app.post("/recalculateProduct", async (req: Express.Request, res: Express.Response) => {
     try
     {
-        await updateProductCounters(db, req.body.externalId);
+        let [product, productRef] = await getProductInfo(req.body.externalId);
+        await updateProductCounters(db, product, productRef);
         res.status(200).send("OK");
 
     } catch (e) {

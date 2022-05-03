@@ -2,13 +2,16 @@ export interface User
 {
     bio: string;
     brand: string;
-    clout: number;
+
     code: string;
     dateAdded: Date;
     dateUpdated: Date;
     email: string;
+
+    clout: number;
     followerCount: number;
     followingCount: number;
+
     isActive: boolean;
     isAdmin: boolean;
     isApproved: boolean;
