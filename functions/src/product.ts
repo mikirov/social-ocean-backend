@@ -6,13 +6,15 @@ export interface Product
     totalPostLikes: number;
     totalRecommendationLikes: number;
 
+    favoriteCount: number;
+    saveCount: number;
+
     brand: string;
     category: string;
     dateAdded: Date;
     details: string;
     domain: string;
     externalId: string;
-    favoriteCount: number;
     hero: string;
     isActive: boolean;
     isCatchofTheDay: boolean;
@@ -21,7 +23,6 @@ export interface Product
     link: string;
     localPath: string;
     remotePath: string;
-    saveCount: number;
     shipping: string;
     subtitle: string;
     title: string;

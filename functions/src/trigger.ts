@@ -4,7 +4,6 @@ import {Change} from "firebase-functions";
 
 import admin from 'firebase-admin';
 import {
-    ACCOUNT_CREATION_CLOUT_POINTS,
     addFollowActivity,
     addPostActivityAndPushNotification,
     addRecommendationActivityAndPushNotification,
@@ -21,9 +20,10 @@ import {
     updateProductFieldsInCollection,
     updateRecommendationCounters,
     updateUserCounters,
-    saveItemData, updateUserFieldsInCollection, hasMoreLikesThanCount
+    saveItemData, updateUserFieldsInCollection, hasMoreLikesThanCount, updatePostFieldsInCollection
 } from './helper';
 import {Product} from "./product";
+import {ACCOUNT_CREATION_CLOUT_POINTS} from "./constants";
 
 const  db = admin.firestore();
 
@@ -74,12 +74,10 @@ export const onItemSaved = functions.firestore
 
         try
         {
-            let [user, userRef] = await getUserInfo(docData.userId);
-            await updateUserCounters(db, user, userRef);
-
             const [product, productRef] = await getProductInfo(docData.externalProductId);
             await updateProductCounters(db, product, productRef);
 
+            let [user, userRef] = await getUserInfo(docData.userId);
             await saveItemData(docData, docRef, product, user);
         }
         catch (e) {
@@ -93,9 +91,6 @@ export const onItemUnsaved = functions.firestore
     .onDelete(async (change: QueryDocumentSnapshot) => {
         try{
             let docData = change.data();
-
-            let [user, userRef] = await getUserInfo(docData.userId);
-            await updateUserCounters(db, user, userRef);
 
             const [product, productRef] = await getProductInfo(docData.externalProductId);
             await updateProductCounters(db, product, productRef);
@@ -115,9 +110,6 @@ export const onPostCreate = functions.firestore
 
             let [user, userRef] = await getUserInfo(docData.userId);
             await updateUserCounters(db, user, userRef);
-
-            let [post, postRef] = await getPostInfo(docData.postId);
-            await updatePostCounters(db, post, postRef);
 
             const [product, productRef] = await getProductInfo(docData.externalProductId);
             await updateProductCounters(db, product, productRef);
@@ -436,39 +428,6 @@ export const onUserCreate = functions.firestore
         }
     });
 
-
-
-const updatePostFieldsInCollection = async(collectionName: string, postData: any, postId: string) => {
-
-    const batchArray = [];
-    batchArray.push(db.batch());
-    let operationCounter = 0;
-    let batchIndex = 0;
-
-    const snapshot = await db.collection(collectionName).where('postId', '==', postId).get();
-    snapshot.forEach(documentSnapshot => {
-        if(!documentSnapshot.exists) return;
-
-        const dataToUpdate = {
-            postRate: postData.rate,
-            postTitle: postData.title,
-            postsSubtitle: postData.subtitle
-        }
-
-        batchArray[batchIndex].update(documentSnapshot.ref, dataToUpdate);
-        operationCounter++;
-
-        if (operationCounter === 499) {
-            batchArray.push(db.batch());
-            batchIndex++;
-            operationCounter = 0;
-        }
-    });
-    await Promise.all(batchArray.map(batch => batch.commit()))
-    //batchArray.forEach(async batch => await batch.commit());
-}
-
-
 export const onPostUpdate = functions.firestore
     .document('posts/{postId}')
     .onWrite(async (change: Change<QueryDocumentSnapshot>) => {
@@ -493,7 +452,7 @@ export const onPostUpdate = functions.firestore
             const docRef = change.after.ref;
             await saveItemData(docData, docRef, product, user);
 
-            await updatePostFieldsInCollection('postedItemLikes', docData, currentId);
+            await updatePostFieldsInCollection(db, 'postedItemLikes', docData, currentId);
 
         }
         catch (e) {
@@ -528,7 +487,7 @@ export const onRecommendationUpdate = functions.firestore
             await updateUserCounters(db, user, userRef);
 
             await saveItemData(docData, docRef, product, user);
-            await updatePostFieldsInCollection('recommendedItemLikes', docData, currentId);
+            await updatePostFieldsInCollection(db, 'recommendedItemLikes', docData, currentId);
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -554,7 +513,7 @@ export const onRecommendationCreate = functions.firestore
             await saveItemData(docData, docRef, product, user);
 
             //propagate data changes
-            await updatePostFieldsInCollection('recommendedItemLikes', docData, currentId);
+            await updatePostFieldsInCollection(db,'recommendedItemLikes', docData, currentId);
 
             const followers = await getUserFollowers(db, docData.userId);
             const promises = followers.map(follower => addRecommendationActivityAndPushNotification(db, follower[1].id, follower[0].fcmToken, product.title));
@@ -575,8 +534,8 @@ export const onRecommendationDelete = functions.firestore
             const [user, userRef] = await getUserInfo(docData.userId);
             await updateUserCounters(db, user, userRef);
 
-            await deleteAllLikesForRecommendation(db, snapshot.id);
-            //TODO: delete recommendation likes as well
+            const [product, productRef] = await getProductInfo(docData.externalProductId);
+            await updateProductCounters(db, product, productRef);
         }
         catch (e) {
             functions.logger.error(e.message)

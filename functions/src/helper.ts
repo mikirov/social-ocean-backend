@@ -6,13 +6,13 @@ import {User} from "./user";
 import {Post} from "./post";
 import {Brand} from "./brand";
 import {Recommendation} from "./recommendation";
+import {
+    ACCOUNT_CREATION_CLOUT_POINTS,
+    ADD_BIO_CLOUT_POINTS, ADD_FAVORITE_CLOUT_POINTS,
+    ADD_POST_CLOUT_POINTS,
+    ADD_RECOMMENDATION_CLOUT_POINTS, PREFERRED_USER_FAVORITE_THRESHOLD
+} from "./constants";
 
-export const ACCOUNT_CREATION_CLOUT_POINTS = 50;
-export const ADD_BIO_CLOUT_POINTS = 20;
-export const ADD_FAVORITE_CLOUT_POINTS = 50;
-export const ADD_RECOMMENDATION_CLOUT_POINTS = 75;
-export const ADD_POST_CLOUT_POINTS = 75;
-export const PREFERRED_USER_FAVORITE_THRESHOLD = 7;
 
 export const getProductInfo = async (externalProductId:string): Promise<[any, FirebaseFirestore.DocumentReference]> => {
 
@@ -163,7 +163,7 @@ export const updateUserCounters = async(db: any, user: User, userRef: FirebaseFi
             ...user,
             followerCount,
             followingCount,
-            clout
+            clout,
             //dateUpdated: admin.firestore.FieldValue.serverTimestamp()
         }
     //this will trigger user update which will propagate changes to all other collections
@@ -262,6 +262,37 @@ export const updateProductFieldsInCollection = async(db, collectionName: string,
     await Promise.all(batchArray.map(batch => batch.commit()))
     //batchArray.forEach(async batch => await batch.commit());
 }
+
+export const updatePostFieldsInCollection = async(db, collectionName: string, postData: any, postId: string) => {
+
+    const batchArray = [];
+    batchArray.push(db.batch());
+    let operationCounter = 0;
+    let batchIndex = 0;
+
+    const snapshot = await db.collection(collectionName).where('postId', '==', postId).get();
+    snapshot.forEach(documentSnapshot => {
+        if(!documentSnapshot.exists) return;
+
+        const dataToUpdate = {
+            postRate: postData.rate,
+            postTitle: postData.title,
+            postsSubtitle: postData.subtitle
+        }
+
+        batchArray[batchIndex].update(documentSnapshot.ref, dataToUpdate);
+        operationCounter++;
+
+        if (operationCounter === 499) {
+            batchArray.push(db.batch());
+            batchIndex++;
+            operationCounter = 0;
+        }
+    });
+    await Promise.all(batchArray.map(batch => batch.commit()))
+    //batchArray.forEach(async batch => await batch.commit());
+}
+
 
 //this function checks if there is more than one like for a recommendation by a user
 export const hasMoreLikesThanCount = async (db, collectionName: string, fieldName: string, recommendationId: string, userId: string, count: number) : Promise<boolean> => {
