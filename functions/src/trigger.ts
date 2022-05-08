@@ -7,7 +7,6 @@ import {
     addFollowActivity,
     addPostActivityAndPushNotification,
     addRecommendationActivityAndPushNotification,
-    deleteAllLikesForRecommendation,
     getBrandInfo,
     getPostInfo,
     getProductInfo,
@@ -115,7 +114,7 @@ export const onPostCreate = functions.firestore
             await updateProductCounters(db, product, productRef);
 
             const followers = await getUserFollowers(db, docData.userId);
-            const promises = followers.map(follower => addPostActivityAndPushNotification(db, follower[1].id, follower[0].fcmToken, product.title));
+            const promises = followers.map(follower => addPostActivityAndPushNotification(db,docData.userId, docData.externalProductId, follower[1].id, follower[0].fcmToken, product.title));
             await Promise.all(promises);
         }
         catch (e) {
@@ -274,11 +273,17 @@ export const onFollow = functions.firestore
                 fromAuthorImage: fromUserData.localPath || "",
                 fromAuthorRemoteImage: fromUserData.remotePath || "",
                 fromAuthorScore: fromUserData.clout || 0,
+                fromAuthorIsBrand: fromUserData.isBrand || 0,
+                fromAuthorIsApproved: fromUserData.isApproved || 0,
+                fromAuthorIsPreferred: fromUserData.isPreferred || 0,
 
                 toAuthor: toUserData.name || "",
                 toAuthorImage: toUserData.localPath || "",
                 toAuthorRemoteImage: toUserData.remotePath || "",
-                toAuthorScore: toUserData.clout || 0
+                toAuthorScore: toUserData.clout || 0,
+                toAuthorIsBrand: toUserData.isBrand || false,
+                toAuthorIsApproved: toUserData.isApproved || false,
+                toAuthorIsPreferred: toUserData.isPreferred || false
             }
             await docRef.set(docData, {merge: true})
 
@@ -516,7 +521,7 @@ export const onRecommendationCreate = functions.firestore
             await updatePostFieldsInCollection(db,'recommendedItemLikes', docData, currentId);
 
             const followers = await getUserFollowers(db, docData.userId);
-            const promises = followers.map(follower => addRecommendationActivityAndPushNotification(db, follower[1].id, follower[0].fcmToken, product.title));
+            const promises = followers.map(follower => addRecommendationActivityAndPushNotification(db,docData.userId, docData.externalProductId, follower[1].id, follower[0].fcmToken, product.title));
             await Promise.all(promises);
 
         }
@@ -563,9 +568,9 @@ export const onActivityCreated = functions.firestore
                 }
             }
 
-            if(docData.productId)
+            if(docData.externalProductId)
             {
-                const [product] = await getProductInfo(docData.productId);
+                const [product] = await getProductInfo(docData.externalProductId);
                 docData = {
                     ...docData,
 

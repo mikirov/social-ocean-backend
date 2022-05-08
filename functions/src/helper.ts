@@ -10,7 +10,7 @@ import {
     ACCOUNT_CREATION_CLOUT_POINTS,
     ADD_BIO_CLOUT_POINTS, ADD_FAVORITE_CLOUT_POINTS,
     ADD_POST_CLOUT_POINTS,
-    ADD_RECOMMENDATION_CLOUT_POINTS, PREFERRED_USER_FAVORITE_THRESHOLD
+    ADD_RECOMMENDATION_CLOUT_POINTS, PREFERRED_USER_FAVORITE_THRESHOLD, TEST_USER_ID
 } from "./constants";
 
 
@@ -94,6 +94,11 @@ export const getUserInfo = async (userId: string): Promise<[User, FirebaseFirest
 }
 
 export const sendPushNotification = async (token: string, body: string) => {
+    if(!token)
+    {
+        functions.logger.warn('no fcmToken set, cannot send notification');
+        return;
+    }
     const notification = {
         token,
         notification: {
@@ -448,7 +453,7 @@ export const addFollowActivity = async (db, fromUserId, toUserId) => {
 }
 
 export const addProUserActivity = async(db, toUserId: string) => {
-    const activityDocRef = db.collection('activityItems').doc();
+    const activityDocRef = await db.collection('activityItems').doc().get();
     const followActivityData = {
         toUserId: toUserId,
         message: "Congrats. You’ve unlocked Pro features and benefits 💕",
@@ -459,11 +464,13 @@ export const addProUserActivity = async(db, toUserId: string) => {
     await activityDocRef.set(followActivityData, {merge: true});
 }
 
-export const addRecommendationActivityAndPushNotification = async(db, toUserId: string, token: string, productName: string) => {
+export const addRecommendationActivityAndPushNotification = async(db,fromUserId: string, externalProductId: string, toUserId: string, token: string, productName: string) => {
     const activityDocRef = db.collection('activityItems').doc();
     const message = "recommended " + productName;
     const followActivityData = {
-        toUserId: toUserId,
+        toUserId,
+        fromUserId,
+        externalProductId,
         message,
         type: "Recommendation",
         dateAdded: admin.firestore.FieldValue.serverTimestamp()
@@ -474,11 +481,13 @@ export const addRecommendationActivityAndPushNotification = async(db, toUserId: 
     await sendPushNotification(token, message);
 }
 
-export const addPostActivityAndPushNotification = async(db, toUserId: string, token: string, productName: string) => {
+export const addPostActivityAndPushNotification = async(db,fromUserId: string, externalProductId: string, toUserId: string, token: string, productName: string) => {
     const activityDocRef = db.collection('activityItems').doc();
     const message = "added a post for " + productName;
     const followActivityData = {
-        toUserId: toUserId,
+        toUserId,
+        fromUserId,
+        externalProductId,
         message,
         type: "Post",
         dateAdded: admin.firestore.FieldValue.serverTimestamp()
