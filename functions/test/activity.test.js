@@ -90,5 +90,46 @@ describe("Activities:", () => {
         // })
         // await admin.firestore().collection('recommendations').doc('1').delete();
     })
+    it("should make an activity for each follower of post creator", async () => {
+        const wrapped = test.wrap(functions.onRecommendationCreate);
 
+        const product = await admin.firestore().collection('products').doc(TEST_PRODUCT_ID).get();
+
+        const data = {
+            userId: TEST_USER_ID,
+            externalProductId: product.data().externalId
+        }
+
+        await admin.firestore().collection('posts').doc('1').set(data);
+        const snapshot = await admin.firestore().collection('posts').doc('1').get();
+
+        await wrapped(snapshot);
+
+        // const followers = await getUserFollowers(admin.firestore(), TEST_USER_ID);
+        // const promises = await Promise.all(followers.map((follower) => { return admin.firestore().collection('activityItems').where('fromUserId', '==', follower[1].id).get();}));
+        //
+        // const activities = promises.map(p => p.docs[p.docs.length - 1]);
+        // const activityWrapped = test.wrap(functions.onActivityCreated);
+        // await Promise.all(activities.map(activity => activityWrapped(activity)));
+        //
+        // const promisesAfter = await Promise.all(followers.map((follower) => { return admin.firestore().collection('activityItems').where('fromUserId', '==', follower[1].id).get();}));
+        // const activitiesAfter = promises.map(p => p.docs[p.docs.length - 1].data());
+        //
+        //
+        // activitiesAfter.forEach((activityAfter) => {
+        //     expect(activityAfter.dateAdded).to.exist;
+        //     expect(activityAfter.fromAuthor).to.exist;
+        //     expect(activityAfter.fromAuthorImage).to.exist;
+        //     expect(activityAfter.fromAuthorRemoteImage).to.exist;
+        //     expect(activityAfter.toAuthor).to.exist;
+        //     expect(activityAfter.toAuthorImage).to.exist;
+        //     expect(activityAfter.toAuthorRemoteImage).to.exist;
+        //     expect(activityAfter.toAuthorScore).to.exist;
+        //     expect(activityAfter.message).to.exist;
+        //     expect(activityAfter.message).to.eql("recommended " + product.title);
+        //     expect(activityAfter.type).to.exist;
+        //     expect(activityAfter.type).to.eql("Recommendation");
+        // })
+        // await admin.firestore().collection('recommendations').doc('1').delete();
+    })
 });
