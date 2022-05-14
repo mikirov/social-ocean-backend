@@ -1,6 +1,8 @@
 export interface Brand
 {
     dateAdded: Date;
+    dateUpdated: Date;
+
     details: string;
     domain: string;
     externalId: string;

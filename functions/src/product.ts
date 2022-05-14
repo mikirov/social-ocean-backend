@@ -9,9 +9,13 @@ export interface Product
     favoriteCount: number;
     saveCount: number;
 
+    dateAdded: Date;
+    dateUpdated: Date;
+
+
     brand: string;
     category: string;
-    dateAdded: Date;
+
     details: string;
     domain: string;
     externalId: string;

@@ -19,7 +19,11 @@ import {
     updateProductFieldsInCollection,
     updateRecommendationCounters,
     updateUserCounters,
-    saveItemData, updateUserFieldsInCollection, hasMoreLikesThanCount, updatePostFieldsInCollection
+    saveItemData,
+    updateUserFieldsInCollection,
+    hasMoreLikesThanCount,
+    updatePostFieldsInCollection,
+    updateRecommendationFieldsInCollection
 } from './helper';
 import {Product} from "./product";
 import {ACCOUNT_CREATION_CLOUT_POINTS} from "./constants";
@@ -114,13 +118,27 @@ export const onPostCreate = functions.firestore
             await updateProductCounters(db, product, productRef);
 
             const followers = await getUserFollowers(db, docData.userId);
-            const promises = followers.map(follower => addPostActivityAndPushNotification(db,docData.userId, docData.externalProductId, follower[1].id, follower[0].fcmToken, product.title));
+            const promises = followers.map(follower => addPostActivityAndPushNotification(db,docData.userId, docData.externalProductId, follower[1].id, follower[0].fcmToken, user.name));
             await Promise.all(promises);
         }
         catch (e) {
             functions.logger.error(e.message);
         }
 
+    })
+
+export const onPostUpdate = functions.firestore
+    .document('posts/{postId}')
+    .onUpdate(async (change: Change<QueryDocumentSnapshot>) => {
+        try{
+
+            const docData = change.after.data();
+            const currentId = change.after.ref.id;
+            await updatePostFieldsInCollection(db, 'postedItemLikes', docData, currentId);
+        }
+        catch (e) {
+            functions.logger.error(e.message)
+        }
     })
 
 export const onPostDelete = functions.firestore
@@ -337,17 +355,13 @@ export const onProductUpdate = functions.firestore
     .onUpdate(async (change: Change<QueryDocumentSnapshot>) => {
         try{
             const current: Product = change.after.data() as Product;
-            const currentRef = change.after.ref;
-            const prev = change.before.data();
-            if(JSON.stringify(prev) !== JSON.stringify(current))
-            {
-                await updateProductCounters(db, current, currentRef);
-                await updateProductFieldsInCollection(db, 'favoriteItems', current);
-                await updateProductFieldsInCollection(db, 'savedItems', current);
-                await updateProductFieldsInCollection(db, 'recommendations', current);
-                await updateProductFieldsInCollection(db, 'recommendedItemLikes', current);
-                await updateProductFieldsInCollection(db, 'postedItemLikes', current);
-            }
+            await updateProductFieldsInCollection(db, 'favoriteItems', current);
+            await updateProductFieldsInCollection(db, 'savedItems', current);
+            await updateProductFieldsInCollection(db, 'recommendations', current);
+            await updateProductFieldsInCollection(db, 'posts', current);
+            await updateProductFieldsInCollection(db, 'recommendedItemLikes', current);
+            await updateProductFieldsInCollection(db, 'postedItemLikes', current);
+            await updateProductFieldsInCollection(db, 'activityItems', current);
         }
         catch (e) {
             functions.logger.error(e.message);
@@ -360,34 +374,23 @@ export const onUserUpdate = functions.firestore
         try{
             const current = change.after.data();
             const docId = change.after.id;
-            const prev = change.before.data();
 
             if(current.isBrand)
             {
                 functions.logger.info("Brand info changed, we don't want to propagate to other collections");
                 return;
             }
-            if(JSON.stringify(prev) !== JSON.stringify(current)) //HACK: check by value instead of by reference
-            {
-                let [user, userRef] = await getUserInfo(current.userId);
-                await updateUserCounters(db, user, userRef);
+            await updateUserFieldsInCollection(db, 'favoriteItems', 'userId',docId, current);
+            await updateUserFieldsInCollection(db, 'savedItems', 'userId',docId, current);
+            await updateUserFieldsInCollection(db, 'following', 'fromUserId', docId, current);
+            await updateUserFieldsInCollection(db, 'following', 'toUserId', docId, current);
+            await updateUserFieldsInCollection(db, 'recommendedItemLikes', 'userId', docId, current);
+            await updateUserFieldsInCollection(db, 'postedItemLikes', 'userId', docId, current);
+            await updateUserFieldsInCollection(db, 'posts', 'userId', docId, current);
+            await updateUserFieldsInCollection(db, 'recommendations', 'userId', docId, current);
+            await updateUserFieldsInCollection(db, 'activityItems', 'fromUserId', docId, current);
+            await updateUserFieldsInCollection(db, 'activityItems', 'toUserId', docId, current);
 
-                await updateUserFieldsInCollection(db, 'favoriteItems', 'userId',docId, current);
-                await updateUserFieldsInCollection(db, 'savedItems', 'userId',docId, current);
-                await updateUserFieldsInCollection(db, 'following', 'fromUserId', docId, current);
-                await updateUserFieldsInCollection(db, 'following', 'toUserId', docId, current);
-                await updateUserFieldsInCollection(db, 'recommendedItemLikes', 'userId', docId, current);
-                await updateUserFieldsInCollection(db, 'postedItemLikes', 'userId', docId, current);
-                await updateUserFieldsInCollection(db, 'posts', 'userId', docId, current);
-                await updateUserFieldsInCollection(db, 'recommendations', 'userId', docId, current);
-                await updateUserFieldsInCollection(db, 'activityItems', 'fromUserId', docId, current);
-                await updateUserFieldsInCollection(db, 'recommendations', 'toUserId', docId, current);
-
-            }
-            else
-            {
-                functions.logger.info("No change detected, skipping propagation updates");
-            }
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -405,6 +408,7 @@ export const onUserCreate = functions.firestore
             data = {
                 ...data,
                 clout: ACCOUNT_CREATION_CLOUT_POINTS,
+                isPreferred: true,
                 dateAdded: admin.firestore.FieldValue.serverTimestamp()
             }
 
@@ -433,79 +437,12 @@ export const onUserCreate = functions.firestore
         }
     });
 
-export const onPostUpdate = functions.firestore
-    .document('posts/{postId}')
-    .onWrite(async (change: Change<QueryDocumentSnapshot>) => {
-        try{
-
-            const docData = change.after.data();
-            const currentId = change.after.ref.id;
-            const prev = change.before.data();
-            if(JSON.stringify(prev) == JSON.stringify(docData))
-            {
-                functions.logger.error("Shouldn't do anything when data is not updated");
-                return;
-            }
-
-            let [post, postRef] = await getPostInfo(docData.postId);
-            await updatePostCounters(db, post, postRef);
-
-            const [product, productRef] = await getProductInfo(docData.externalProductId);
-            await updateProductCounters(db, product, productRef);
-
-            const [user, userRef] = await getUserInfo(docData.userId);
-            const docRef = change.after.ref;
-            await saveItemData(docData, docRef, product, user);
-
-            await updatePostFieldsInCollection(db, 'postedItemLikes', docData, currentId);
-
-        }
-        catch (e) {
-            functions.logger.error(e.message)
-        }
-    })
-
-export const onRecommendationUpdate = functions.firestore
-    .document('recommendations/{recommendationId}')
-    .onUpdate(async (change: Change<QueryDocumentSnapshot>) => {
-        try{
-
-
-            const docData = change.after.data();
-            const prev = change.before.data();
-            if(JSON.stringify(prev) == JSON.stringify(docData))
-            {
-                functions.logger.error("Shouldn't do anything when data is not updated");
-                return;
-            }
-
-            const docRef = change.after.ref;
-            const currentId: string = change.after.id;
-
-            const [product, productRef] = await getProductInfo(docData.externalProductId);
-            await updateProductCounters(db, product, productRef);
-
-            let [recommendation, recommendationRef] = await getRecommendationInfo(docData.recommendationId);
-            await updateRecommendationCounters(db, recommendation, recommendationRef);
-
-            let [user, userRef] = await getUserInfo(docData.userId);
-            await updateUserCounters(db, user, userRef);
-
-            await saveItemData(docData, docRef, product, user);
-            await updatePostFieldsInCollection(db, 'recommendedItemLikes', docData, currentId);
-        }
-        catch (e) {
-            functions.logger.error(e.message)
-        }
-    })
-
 export const onRecommendationCreate = functions.firestore
     .document('recommendations/{recommendationId}')
     .onCreate(async (change: QueryDocumentSnapshot) => {
         try{
             let docData = change.data();
             const docRef = change.ref;
-            const currentId: string = docRef.id;
 
             //Update counters
             const [user, userRef] = await getUserInfo(docData.userId);
@@ -517,13 +454,22 @@ export const onRecommendationCreate = functions.firestore
             //save all data
             await saveItemData(docData, docRef, product, user);
 
-            //propagate data changes
-            await updatePostFieldsInCollection(db,'recommendedItemLikes', docData, currentId);
-
             const followers = await getUserFollowers(db, docData.userId);
-            const promises = followers.map(follower => addRecommendationActivityAndPushNotification(db,docData.userId, docData.externalProductId, follower[1].id, follower[0].fcmToken, product.title));
+            const promises = followers.map(follower => addRecommendationActivityAndPushNotification(db,docData.userId, docData.externalProductId, follower[1].id, follower[0].fcmToken, user.name));
             await Promise.all(promises);
+        }
+        catch (e) {
+            functions.logger.error(e.message)
+        }
+    })
 
+export const onRecommendationUpdate = functions.firestore
+    .document('recommendations/{recommendationId}')
+    .onUpdate(async (change: Change<QueryDocumentSnapshot>) => {
+        try{
+            const docData = change.after.data();
+            const currentId: string = change.after.id;
+            await updateRecommendationFieldsInCollection(db, 'recommendedItemLikes', docData, currentId);
         }
         catch (e) {
             functions.logger.error(e.message)

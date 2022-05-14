@@ -9,6 +9,7 @@ export interface Post
     authorScore: number;
 
     dateAdded: Date;
+    dateUpdated: Date;
 
     details: string;
     isActive: boolean;

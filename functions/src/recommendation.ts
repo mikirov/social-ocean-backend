@@ -9,6 +9,7 @@ export interface Recommendation
     authorScore: number;
 
     dateAdded: Date;
+    dateUpdated: Date;
 
     details: string;
     isActive: boolean;

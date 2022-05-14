@@ -14,7 +14,8 @@ export {onItemFavorite, onItemUnfavored, onItemSaved, onItemUnsaved,
     onFollow, onUnfollow,
     onProductUpdate,
     onUserCreate, onUserUpdate,
-    onRecommendationUpdate, onRecommendationCreate, onRecommendationDelete, onRecommendationLiked, onRecommendationUnliked,
+    onRecommendationUpdate, onRecommendationCreate, onRecommendationDelete,
+    onRecommendationLiked, onRecommendationUnliked,
     onActivityCreated} from './trigger';
 
 import passport from 'passport';

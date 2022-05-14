@@ -153,15 +153,15 @@ export const updateUserCounters = async(db: any, user: User, userRef: FirebaseFi
 
     const productsFavoritedByUser: number = await getNumberProductsFavoritedByUser(db, userRef.id);
 
-    if(productsFavoritedByUser == PREFERRED_USER_FAVORITE_THRESHOLD && !user.isPreferred)
-    {
-        user = {
-            ...user,
-            isPreferred: true
-        };
-
-        await addProUserActivity(db, userRef.id);
-    }
+    // if(productsFavoritedByUser == PREFERRED_USER_FAVORITE_THRESHOLD && !user.isPreferred)
+    // {
+    //     user = {
+    //         ...user,
+    //         isPreferred: true
+    //     };
+    //
+    //     await addProUserActivity(db, userRef.id);
+    // }
 
     user =
         {
@@ -169,7 +169,8 @@ export const updateUserCounters = async(db: any, user: User, userRef: FirebaseFi
             followerCount,
             followingCount,
             clout,
-            //dateUpdated: admin.firestore.FieldValue.serverTimestamp()
+            // @ts-ignore
+            dateUpdated: admin.firestore.FieldValue.serverTimestamp()
         }
     //this will trigger user update which will propagate changes to all other collections
     await userRef.set(user, {merge: true});
@@ -203,7 +204,9 @@ export const updateProductCounters = async (db: any, product: Product, productRe
         postCount,
         recommendationCount,
         totalPostLikes,
-        totalRecommendationLikes
+        totalRecommendationLikes,
+        // @ts-ignore
+        dateUpdated: admin.firestore.FieldValue.serverTimestamp()
     }
 
     await productRef.set(product, {merge: true});
@@ -217,6 +220,8 @@ export const updateRecommendationCounters = async (db: any, recommendation: Reco
     recommendation = {
         ...recommendation,
         rate,
+        // @ts-ignore
+        dateUpdated: admin.firestore.FieldValue.serverTimestamp()
     }
     functions.logger.info(recommendation);
     await recommendationRef.set(recommendation, {merge: true});
@@ -230,6 +235,8 @@ export const updatePostCounters = async (db: any, post: Post, postRef: FirebaseF
     post = {
         ...post,
         rate,
+        // @ts-ignore
+        dateUpdated: admin.firestore.FieldValue.serverTimestamp()
     }
 
     await postRef.set(post, {merge: true});
@@ -253,7 +260,11 @@ export const updateProductFieldsInCollection = async(db, collectionName: string,
             productRemotePath: productData.remotePath,
             productTitle: productData.title,
             productSaveCount: productData.saveCount,
-            productFavoriteCount: productData.favoriteCount}
+            productFavoriteCount: productData.favoriteCount,
+
+            // @ts-ignore
+            dateUpdated: admin.firestore.FieldValue.serverTimestamp()
+        }
 
         batchArray[batchIndex].update(documentSnapshot.ref, dataToUpdate);
         operationCounter++;
@@ -282,7 +293,10 @@ export const updatePostFieldsInCollection = async(db, collectionName: string, po
         const dataToUpdate = {
             postRate: postData.rate,
             postTitle: postData.title,
-            postsSubtitle: postData.subtitle
+            postsSubtitle: postData.subtitle,
+
+            // @ts-ignore
+            dateUpdated: admin.firestore.FieldValue.serverTimestamp()
         }
 
         batchArray[batchIndex].update(documentSnapshot.ref, dataToUpdate);
@@ -338,7 +352,10 @@ export const updateUserFieldsInCollection = async(db, collectionName: string, id
                     authorRemoteImage: userData.remotePath,
                     authorIsBrand: userData.isBrand,
                     authorIsApproved: userData.isApproved,
-                    authorIsPreferred: userData.isPreferred
+                    authorIsPreferred: userData.isPreferred,
+
+                    // @ts-ignore
+                    dateUpdated: admin.firestore.FieldValue.serverTimestamp()
                 }
             }
                 break;
@@ -352,7 +369,10 @@ export const updateUserFieldsInCollection = async(db, collectionName: string, id
                         fromAuthorRemoteImage: userData.remotePath,
                         fromAuthorIsBrand: userData.isBrand,
                         fromAuthorIsApproved: userData.isApproved,
-                        fromAuthorIsPreferred: userData.isPreferred
+                        fromAuthorIsPreferred: userData.isPreferred,
+
+                        // @ts-ignore
+                        dateUpdated: admin.firestore.FieldValue.serverTimestamp()
                     }
             }
                 break;
@@ -366,7 +386,10 @@ export const updateUserFieldsInCollection = async(db, collectionName: string, id
                         toAuthorRemoteImage: userData.remotePath,
                         toAuthorIsBrand: userData.isBrand,
                         toAuthorIsApproved: userData.isApproved,
-                        toAuthorIsPreferred: userData.isPreferred
+                        toAuthorIsPreferred: userData.isPreferred,
+
+                        // @ts-ignore
+                        dateUpdated: admin.firestore.FieldValue.serverTimestamp()
                     }
             }
                 break;
@@ -401,7 +424,10 @@ export const updateRecommendationFieldsInCollection = async(db, collectionName: 
             recommendationRate: recommendationData.rate,
             recommendationTile: recommendationData.title,
             recommendationSubtitle: recommendationData.subtitle,
-            recommendationDetails: recommendationData.details
+            recommendationDetails: recommendationData.details,
+
+            // @ts-ignore
+            dateUpdated: admin.firestore.FieldValue.serverTimestamp()
         }
 
         batchArray[batchIndex].update(documentSnapshot.ref, dataToUpdate);
@@ -415,28 +441,6 @@ export const updateRecommendationFieldsInCollection = async(db, collectionName: 
     });
     await Promise.all(batchArray.map(batch => batch.commit()))
     //batchArray.forEach(async batch => await batch.commit());
-}
-
-export const deleteAllLikesForRecommendation = async (db, recommendationId: string) => {
-    const batchArray = [];
-    batchArray.push(db.batch());
-    let operationCounter = 0;
-    let batchIndex = 0;
-
-    const snapshot = await db.collection('recommendedItemLikes').where('recommendationId', '==', recommendationId).get();
-    snapshot.forEach(documentSnapshot => {
-        if(!documentSnapshot.exists) return;
-
-        batchArray[batchIndex].delete(documentSnapshot.ref);
-        operationCounter++;
-
-        if (operationCounter === 499) {
-            batchArray.push(db.batch());
-            batchIndex++;
-            operationCounter = 0;
-        }
-    });
-    await Promise.all(batchArray.map(batch => batch.commit()))
 }
 
 export const addFollowActivity = async (db, fromUserId, toUserId) => {
@@ -464,9 +468,9 @@ export const addProUserActivity = async(db, toUserId: string) => {
     await activityDocRef.set(followActivityData, {merge: true});
 }
 
-export const addRecommendationActivityAndPushNotification = async(db,fromUserId: string, externalProductId: string, toUserId: string, token: string, productName: string) => {
+export const addRecommendationActivityAndPushNotification = async(db,fromUserId: string, externalProductId: string, toUserId: string, token: string, userName: string) => {
     const activityDocRef = db.collection('activityItems').doc();
-    const message = "recommended " + productName;
+    const message = userName + " recommended a new product";
     const followActivityData = {
         toUserId,
         fromUserId,
@@ -481,9 +485,9 @@ export const addRecommendationActivityAndPushNotification = async(db,fromUserId:
     await sendPushNotification(token, message);
 }
 
-export const addPostActivityAndPushNotification = async(db,fromUserId: string, externalProductId: string, toUserId: string, token: string, productName: string) => {
+export const addPostActivityAndPushNotification = async(db,fromUserId: string, externalProductId: string, toUserId: string, token: string, userName: string) => {
     const activityDocRef = db.collection('activityItems').doc();
-    const message = "added a post for " + productName;
+    const message = " added a post for a new product";
     const followActivityData = {
         toUserId,
         fromUserId,
@@ -509,6 +513,8 @@ export const saveItemData = async (docData, docRef, product, userData, recommend
 
     docData = {
         ...docData,
+
+        dateAdded: admin.firestore.FieldValue.serverTimestamp(),
 
         author: userData.name || "",
         authorImage: userData.localPath || "",
