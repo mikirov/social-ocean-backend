@@ -16,7 +16,8 @@ export {onItemFavorite, onItemUnfavored, onItemSaved, onItemUnsaved,
     onUserCreate, onUserUpdate,
     onRecommendationUpdate, onRecommendationCreate, onRecommendationDelete,
     onRecommendationLiked, onRecommendationUnliked,
-    onActivityCreated} from './trigger';
+    onActivityCreated,
+    onBrandUpdate} from './trigger';
 
 import passport from 'passport';
 import {BasicStrategy} from "passport-http";

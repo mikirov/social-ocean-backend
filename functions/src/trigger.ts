@@ -23,7 +23,7 @@ import {
     updateUserFieldsInCollection,
     hasMoreLikesThanCount,
     updatePostFieldsInCollection,
-    updateRecommendationFieldsInCollection
+    updateRecommendationFieldsInCollection, addBrandActivityAndPushNotification, getRequesters
 } from './helper';
 import {Product} from "./product";
 import {ACCOUNT_CREATION_CLOUT_POINTS} from "./constants";
@@ -558,6 +558,25 @@ export const onActivityCreated = functions.firestore
         }
     })
 
+
+export const onBrandUpdate = functions.firestore
+    .document('brands/{brandId}')
+    .onUpdate(async (change: Change<QueryDocumentSnapshot>) => {
+        try{
+            const docData = change.after.data();
+            //TODO: update brand in collection
+            //TODO: send push notifications to all requesters
+            if(docData.isApproved)
+            {
+                const requesters = await getRequesters(db, docData.title);
+                const promises = requesters.map(requester => addBrandActivityAndPushNotification(db,requester[1].id, requester[0].fcmToken, docData.title));
+                await Promise.all(promises);
+            }
+        }
+        catch (e) {
+            functions.logger.error(e.message)
+        }
+    })
 // import { Twilio } from 'twilio';
 // const client = new Twilio(process.env.ACCOUNT_SID, process.env.AUTH_TOKEN);
 //

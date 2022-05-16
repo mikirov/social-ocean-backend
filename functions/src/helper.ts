@@ -470,7 +470,8 @@ export const addProUserActivity = async(db, toUserId: string) => {
 
 export const addRecommendationActivityAndPushNotification = async(db,fromUserId: string, externalProductId: string, toUserId: string, token: string, userName: string) => {
     const activityDocRef = db.collection('activityItems').doc();
-    const message = userName + " recommended a new product";
+    const notificationMessage = userName + " recommended a new product";
+    const message = "recommended a new product";
     const followActivityData = {
         toUserId,
         fromUserId,
@@ -481,6 +482,21 @@ export const addRecommendationActivityAndPushNotification = async(db,fromUserId:
     };
 
     await activityDocRef.set(followActivityData, {merge: true});
+
+    await sendPushNotification(token, notificationMessage);
+}
+
+export const addBrandActivityAndPushNotification = async(db, toUserId: string, token: string, brandName: string) => {
+    const activityDocRef = db.collection('activityItems').doc();
+    const message = "Congratulations." + brandName +" has been approved 🎉";
+    const brandActivityData = {
+        toUserId,
+        message,
+        type: "Brand",
+        dateAdded: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await activityDocRef.set(brandActivityData, {merge: true});
 
     await sendPushNotification(token, message);
 }
@@ -507,6 +523,12 @@ export const getUserFollowers = async(db, userId) : Promise<any> => {
     const promises = snapshots.docs.filter(doc => doc.exists).map(doc => getUserInfo(doc.data().fromUserId));
     return await Promise.all(promises);
 
+}
+
+export const getRequesters = async (db, title: string) : Promise<any> => {
+    const snapshots = await db.collection('brandRequests').where('title', '==', title).get();
+    const promises = snapshots.docs.filter(doc => doc.exists).map(doc => getUserInfo(doc.data().userId));
+    return await Promise.all(promises);
 }
 
 export const saveItemData = async (docData, docRef, product, userData, recommendation = null, post = null) => {
