@@ -3,6 +3,7 @@ import cors from 'cors';
 import * as functions from "firebase-functions";
 import admin from 'firebase-admin';
 import util from 'util';
+
 admin.initializeApp();
 
 const  db = admin.firestore();
@@ -19,28 +20,13 @@ export {onItemFavorite, onItemUnfavored, onItemSaved, onItemUnsaved,
     onActivityCreated,
     onBrandUpdate} from './trigger';
 
-import passport from 'passport';
-import {BasicStrategy} from "passport-http";
 import {getPostInfo, getProductInfo, getRecommendationInfo, getUserInfo, updateProductCounters, updateUserCounters } from './helper';
 import express from 'express';
-passport.use(new BasicStrategy(
-    async function(userid: string, password: string, done: any) {
-        const adminUserSnapshot = await db.collection('admin').doc(userid).get();
 
-        if(!adminUserSnapshot.exists)
-        {
-            return done(null, false);
-        }
-        const adminUserData = adminUserSnapshot.data();
-
-        if (!adminUserData || adminUserData.password !== password)
-        {
-            return done(null, false);
-        }
-        return done(null, adminUserData);
-    }
-));
-
+import Shopify, {
+    ApiVersion,
+    AuthQuery
+} from '@shopify/shopify-api';
 
 let app: Express.Application = Express();
 app.use(Express.urlencoded({ extended: false }));
@@ -49,7 +35,7 @@ const options: cors.CorsOptions = {
 };
 app.use(cors(options));
 
-app.use(passport.authenticate('basic', { session: false }));
+//app.use(passport.authenticate('basic', { session: false }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -122,7 +108,6 @@ app.get("/unparsableDomains", async (req: Express.Request, res: Express.Response
     res.status(200).send(Array.from(new Set(domains)));
 })
 
-
 const updateFollowCounts = async (req: Express.Request, res: Express.Response) => {
     try {
         const followingSnapshot = await db.collection('following').get();
@@ -175,7 +160,6 @@ const updateFollowCounts = async (req: Express.Request, res: Express.Response) =
     }
 
 }
-
 
 const updateProductCounts = async () => {
     try{
@@ -276,7 +260,6 @@ const updateRecommendationCounts = async () => {
 
 }
 
-//TODO: call functions as middleware
 app.post("/recalculate", async (req: Express.Request, res: Express.Response) => {
     try
     {
@@ -293,8 +276,6 @@ app.post("/recalculate", async (req: Express.Request, res: Express.Response) => 
     }
 
 })
-
-
 
 app.post("/recalculateUser", async (req: Express.Request, res: Express.Response) => {
     try
@@ -341,6 +322,100 @@ app.get("/brands", async (req: Express.Request, res: Express.Response) => {
     res.status(200).send(Array.from(new Set(brands)));
 
 })
+
+Shopify.Context.initialize({
+    API_KEY: "2271ad9473b2ee1d36b26a7a950d59c0", //API_KEY
+    API_SECRET_KEY: "1b24986f532d52dc979b7d20e3ced8bf", // SECRET
+    SCOPES: ["read_products"],
+    HOST_NAME: "us-central1-social-ocean-6d649.cloudfunctions.net/appv2/importShopifyProducts",
+    IS_EMBEDDED_APP: false,
+    API_VERSION: ApiVersion.October21// all supported versions are available, as well as "unstable" and "unversioned"
+});
+
+// Shopify.Context.initialize({
+//     API_KEY: "2271ad9473b2ee1d36b26a7a950d59c0", //API_KEY
+//     API_SECRET_KEY: "1b24986f532d52dc979b7d20e3ced8bf", // SECRET
+//     SCOPES: ["read_products"],
+//     HOST_NAME: "e5a4-78-83-121-5.ngrok.io/importShopifyProducts",
+//     IS_EMBEDDED_APP: false,
+//     API_VERSION: ApiVersion.October21// all supported versions are available, as well as "unstable" and "unversioned"
+// });
+
+app.get('/importShopifyProducts', async (req, res) => {
+    let authRoute = await Shopify.Auth.beginAuth(
+        req,
+        res,
+        req.query.shop as string,
+        '/auth/callback',
+        false,
+    );
+
+    res.redirect(authRoute);
+    return
+});
+
+app.get('/importShopifyProducts/auth/callback', async (req, res) => {
+    try {
+        const session = await Shopify.Auth.validateAuthCallback(
+            req,
+            res,
+            req.query as unknown as AuthQuery,
+        ); // req.query must be cast to unkown and then AuthQuery in order to be accepted
+        functions.logger.log(session);
+        console.log(session);
+
+
+        const client = new Shopify.Clients.Rest(session.shop, session.accessToken);
+        // Use `client.get` to request the specified Shopify REST API endpoint, in this case `products`.
+        const response = await client.get({
+            path: 'products',
+        });
+
+        functions.logger.log((response.body as any).products);
+        console.log((response.body as any).products);
+        const productsRaw = (response.body as any).products;
+        await Promise.all(productsRaw.map(async (product) => {
+            functions.logger.log(product);
+            console.log(product);
+            const docRef = db.collection('products').doc();
+            const productData = {
+                boughtCount: 0,
+                postCount: 0,
+                recommendationCount: 0,
+                totalPostLikes: 0,
+                totalRecommendationLikes: 0,
+
+                favoriteCount: 0,
+                saveCount: 0,
+
+                dateAdded: admin.firestore.FieldValue.serverTimestamp(),
+                dateUpdated: admin.firestore.FieldValue.serverTimestamp(),
+                brand: product.vendor || "",
+                category: product.product_type || "",
+                details: product.description || "",
+                domain: product.url || "",
+                externalId: docRef.id,
+                hero: "",
+                isActive: false,
+                isCatchofTheDay: false,
+                isHighlighted: false,
+                isPopularUS: false,
+                link: product.url || "",
+                localPath: product.image.src || "",
+                remotePath: product.image.src || "",
+                shipping: "",
+                subtitle: "",
+                title: product.title || ""
+            }
+
+            await docRef.set(productData, {merge: true});
+        }));
+        res.status(200).send("OK");
+    } catch (error) {
+        console.error(error); // in practice these should be handled more gracefully
+        res.status(500).send();
+    }
+});
 
 exports.appv2 = functions
     .runWith({

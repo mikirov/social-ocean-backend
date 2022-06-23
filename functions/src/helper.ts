@@ -488,7 +488,7 @@ export const addRecommendationActivityAndPushNotification = async(db,fromUserId:
 
 export const addBrandActivityAndPushNotification = async(db, toUserId: string, token: string, brandName: string) => {
     const activityDocRef = db.collection('activityItems').doc();
-    const message = "Congratulations." + brandName +" has been approved 🎉";
+    const message = "Congratulations. " + brandName +" has been approved 🎉";
     const brandActivityData = {
         toUserId,
         message,
@@ -527,7 +527,7 @@ export const getUserFollowers = async(db, userId) : Promise<any> => {
 
 export const getRequesters = async (db, title: string) : Promise<any> => {
     const snapshots = await db.collection('brandRequests').where('title', '==', title).get();
-    const promises = snapshots.docs.filter(doc => doc.exists).map(doc => getUserInfo(doc.data().userId));
+    const promises = Array.from(new Set(snapshots.docs.filter(doc => doc.exists).map(doc => doc.data().userId))).map((id: string) => getUserInfo(id));
     return await Promise.all(promises);
 }
 

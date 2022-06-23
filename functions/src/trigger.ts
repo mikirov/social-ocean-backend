@@ -564,9 +564,10 @@ export const onBrandUpdate = functions.firestore
     .onUpdate(async (change: Change<QueryDocumentSnapshot>) => {
         try{
             const docData = change.after.data();
+            const before = change.before.data();
             //TODO: update brand in collection
             //TODO: send push notifications to all requesters
-            if(docData.isApproved)
+            if(!before.isApproved && docData.isApproved)
             {
                 const requesters = await getRequesters(db, docData.title);
                 const promises = requesters.map(requester => addBrandActivityAndPushNotification(db,requester[1].id, requester[0].fcmToken, docData.title));
